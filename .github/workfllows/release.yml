@@ -1,0 +1,48 @@
+name: Release PR
+
+on:
+  push:
+    branches:
+      - master
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  release:
+    name: Release PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+
+      - name: Fetch Private Actions
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+          repository: interviewstreet/actions
+          ssh-key: ${{ secrets.ACTIONS_SSH_KEY }}
+          path: .actions
+
+      - name: Setup SSH
+        uses: ./.actions/shell/ssh-agent
+        with:
+          ssh-private-key: ${{ secrets.ACTIONS_SSH_KEY }}
+
+      - name: Add npmrc
+        run: |
+          rm -f .npmrc
+          echo "//nexus.hackerrank.com/repository/hr-npm-hosted/:_authToken=${NEXUS_PUBLISH_TOKEN}" > .npmrc
+          echo "email=hackerrank-admin@hackerrank.com" >> .npmrc
+          echo "always-auth=true" >> .npmrc
+          echo "registry=https://nexus.hackerrank.com/repository/hr-npm-hosted/" >> .npmrc
+        env:
+          NEXUS_PUBLISH_TOKEN: ${{ secrets.NEXUS_PUBLISH_TOKEN }}
+
+      - name: Publish
+        run: yarn deploy
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEXUS_PUBLISH_TOKEN: ${{ secrets.NEXUS_PUBLISH_TOKEN }}
+          IS_MONOREPO: "true"
